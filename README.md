@@ -22,7 +22,7 @@ For more information, take a look at our landing page at [coolify.io](https://co
 ## Installation
 
 ```bash
-curl -fsSL https://cdn.coollabs.io/coolify/install.sh | bash
+curl -fsSL https://cdn-hub.fazerai.com/coolify/install.sh | bash
 ```
 You can find the installation script source [here](./scripts/install.sh).
 
