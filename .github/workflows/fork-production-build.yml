@@ -1,0 +1,127 @@
+name: Fork Production Build
+
+on:
+  release:
+    types: [released]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version tag (e.g., 4.0.0-beta.468-fazer-ai.1)"
+        required: true
+
+permissions:
+  contents: read
+  packages: write
+
+env:
+  REGISTRY: ghcr.io
+  VERSION: ${{ github.event.release.tag_name || inputs.version }}
+
+jobs:
+  build-coolify:
+    strategy:
+      matrix:
+        include:
+          - arch: amd64
+            platform: linux/amd64
+            runner: ubuntu-24.04
+          - arch: aarch64
+            platform: linux/aarch64
+            runner: ubuntu-24.04-arm
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Patch version in constants.php
+        run: |
+          sed -i "s/'version' => '.*'/'version' => '${{ env.VERSION }}'/" config/constants.php
+          grep "'version'" config/constants.php
+
+      - name: Login to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and Push Image (${{ matrix.arch }})
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: docker/production/Dockerfile
+          platforms: ${{ matrix.platform }}
+          push: true
+          tags: |
+            ${{ env.REGISTRY }}/fazer-ai/coolify:${{ env.VERSION }}-${{ matrix.arch }}
+
+  merge-coolify-manifest:
+    runs-on: ubuntu-24.04
+    needs: build-coolify
+    steps:
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Login to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Create & publish multi-arch manifest
+        run: |
+          docker buildx imagetools create \
+            ${{ env.REGISTRY }}/fazer-ai/coolify:${{ env.VERSION }}-amd64 \
+            ${{ env.REGISTRY }}/fazer-ai/coolify:${{ env.VERSION }}-aarch64 \
+            --tag ${{ env.REGISTRY }}/fazer-ai/coolify:${{ env.VERSION }} \
+            --tag ${{ env.REGISTRY }}/fazer-ai/coolify:latest
+
+  upload-cdn:
+    runs-on: ubuntu-24.04
+    needs: merge-coolify-manifest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Get upstream versions
+        id: upstream
+        run: |
+          echo "HELPER_VERSION=$(docker run --rm -v "$(pwd):/app" -w /app php:8.2-alpine3.16 php bootstrap/getHelperVersion.php)" | xargs >> $GITHUB_OUTPUT
+          echo "REALTIME_VERSION=$(docker run --rm -v "$(pwd):/app" -w /app php:8.2-alpine3.16 php bootstrap/getRealtimeVersion.php)" | xargs >> $GITHUB_OUTPUT
+
+      - name: Generate versions.json
+        run: |
+          cat > /tmp/versions.json <<'TEMPLATE'
+          {
+            "coolify": {
+              "v4": {
+                "version": "VERSION_PLACEHOLDER"
+              }
+            },
+            "helper": {
+              "version": "HELPER_PLACEHOLDER"
+            },
+            "realtime": {
+              "version": "REALTIME_PLACEHOLDER"
+            }
+          }
+          TEMPLATE
+          sed -i "s/VERSION_PLACEHOLDER/${{ env.VERSION }}/" /tmp/versions.json
+          sed -i "s/HELPER_PLACEHOLDER/${{ steps.upstream.outputs.HELPER_VERSION }}/" /tmp/versions.json
+          sed -i "s/REALTIME_PLACEHOLDER/${{ steps.upstream.outputs.REALTIME_VERSION }}/" /tmp/versions.json
+          cat /tmp/versions.json
+
+      - name: Upload files to R2
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          npx wrangler r2 object put fazer-ai-cdn/coolify/install.sh --file=scripts/install.sh --content-type="text/plain"
+          npx wrangler r2 object put fazer-ai-cdn/coolify/upgrade.sh --file=scripts/upgrade.sh --content-type="text/plain"
+          npx wrangler r2 object put fazer-ai-cdn/coolify/docker-compose.yml --file=docker-compose.yml --content-type="text/yaml"
+          npx wrangler r2 object put fazer-ai-cdn/coolify/docker-compose.prod.yml --file=docker-compose.prod.yml --content-type="text/yaml"
+          npx wrangler r2 object put fazer-ai-cdn/coolify/.env.production --file=.env.production --content-type="text/plain"
+          npx wrangler r2 object put fazer-ai-cdn/coolify/versions.json --file=/tmp/versions.json --content-type="application/json"

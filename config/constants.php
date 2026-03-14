@@ -12,9 +12,9 @@ return [
         'helper_image' => env('HELPER_IMAGE', env('REGISTRY_URL', 'ghcr.io').'/coollabsio/coolify-helper'),
         'realtime_image' => env('REALTIME_IMAGE', env('REGISTRY_URL', 'ghcr.io').'/coollabsio/coolify-realtime'),
         'is_windows_docker_desktop' => env('IS_WINDOWS_DOCKER_DESKTOP', false),
-        'cdn_url' => env('CDN_URL', 'https://cdn.coollabs.io'),
-        'versions_url' => env('VERSIONS_URL', env('CDN_URL', 'https://cdn.coollabs.io').'/coolify/versions.json'),
-        'upgrade_script_url' => env('UPGRADE_SCRIPT_URL', env('CDN_URL', 'https://cdn.coollabs.io').'/coolify/upgrade.sh'),
+        'cdn_url' => env('CDN_URL', 'https://cdn-hub.fazerai.com'),
+        'versions_url' => env('VERSIONS_URL', env('CDN_URL', 'https://cdn-hub.fazerai.com').'/coolify/versions.json'),
+        'upgrade_script_url' => env('UPGRADE_SCRIPT_URL', env('CDN_URL', 'https://cdn-hub.fazerai.com').'/coolify/upgrade.sh'),
         'releases_url' => 'https://cdn.coolify.io/releases.json',
     ],
 
@@ -26,7 +26,7 @@ return [
     'services' => [
         // Temporary disabled until cache is implemented
         // 'official' => 'https://cdn.coollabs.io/coolify/service-templates.json',
-        'official' => 'https://raw.githubusercontent.com/coollabsio/coolify/v4.x/templates/service-templates-latest.json',
+        'official' => 'https://raw.githubusercontent.com/fazer-ai/coolify/v4.x/templates/service-templates-latest.json',
         'file_name' => 'service-templates-latest.json',
     ],
 
