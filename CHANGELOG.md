@@ -5916,6 +5916,7 @@ All notable changes to this project will be documented in this file.
 - *(readme)* Add VPSDime to Big Sponsors list
 - *(readme)* Move MVPS to Huge Sponsors section
 - *(settings)* Clarify Do Not Track helper text
+- Update changelog
 
 ### ⚡ Performance
 
