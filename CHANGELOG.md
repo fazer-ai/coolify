@@ -4,8 +4,15 @@ All notable changes to this project will be documented in this file.
 
 ## [unreleased]
 
+### ⚙️ Miscellaneous Tasks
+
+- Add --remote flag to R2 object upload commands
+
+## [4.0.0-beta.468-fazer-ai.2] - 2026-03-14
+
 ### 📚 Documentation
 
+- Update changelog
 - Update changelog
 
 ### ⚙️ Miscellaneous Tasks
