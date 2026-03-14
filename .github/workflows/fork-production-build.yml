@@ -119,9 +119,9 @@ jobs:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: |
-          npx wrangler r2 object put fazer-ai-hub-assets/coolify/install.sh --file=scripts/install.sh --content-type="text/plain"
-          npx wrangler r2 object put fazer-ai-hub-assets/coolify/upgrade.sh --file=scripts/upgrade.sh --content-type="text/plain"
-          npx wrangler r2 object put fazer-ai-hub-assets/coolify/docker-compose.yml --file=docker-compose.yml --content-type="text/yaml"
-          npx wrangler r2 object put fazer-ai-hub-assets/coolify/docker-compose.prod.yml --file=docker-compose.prod.yml --content-type="text/yaml"
-          npx wrangler r2 object put fazer-ai-hub-assets/coolify/.env.production --file=.env.production --content-type="text/plain"
-          npx wrangler r2 object put fazer-ai-hub-assets/coolify/versions.json --file=/tmp/versions.json --content-type="application/json"
+          npx wrangler r2 object put fazer-ai-hub-assets/coolify/install.sh --file=scripts/install.sh --content-type="text/plain" --remote
+          npx wrangler r2 object put fazer-ai-hub-assets/coolify/upgrade.sh --file=scripts/upgrade.sh --content-type="text/plain" --remote
+          npx wrangler r2 object put fazer-ai-hub-assets/coolify/docker-compose.yml --file=docker-compose.yml --content-type="text/yaml" --remote
+          npx wrangler r2 object put fazer-ai-hub-assets/coolify/docker-compose.prod.yml --file=docker-compose.prod.yml --content-type="text/yaml" --remote
+          npx wrangler r2 object put fazer-ai-hub-assets/coolify/.env.production --file=.env.production --content-type="text/plain" --remote
+          npx wrangler r2 object put fazer-ai-hub-assets/coolify/versions.json --file=/tmp/versions.json --content-type="application/json" --remote
