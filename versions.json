@@ -1,5 +1,13 @@
 {
-  "version": "4.0.0-beta.468",
-  "helper_version": "1.0.12",
-  "realtime_version": "1.0.11"
+  "coolify": {
+    "v4": {
+      "version": "4.0.0-beta.468"
+    }
+  },
+  "helper": {
+    "version": "1.0.12"
+  },
+  "realtime": {
+    "version": "1.0.11"
+  }
 }
