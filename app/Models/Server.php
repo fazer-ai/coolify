@@ -385,14 +385,21 @@ class Server extends BaseModel
                             'routers' => [
                                 'catchall' => [
                                     'entryPoints' => [
-                                        0 => 'http',
-                                        1 => 'https',
+                                        0 => 'https',
                                     ],
                                     'service' => 'maintenance',
                                     'rule' => 'PathPrefix(`/`)',
                                     'tls' => [
                                         'certResolver' => 'letsencrypt',
                                     ],
+                                    'priority' => -1000,
+                                ],
+                                'catchall-http' => [
+                                    'entryPoints' => [
+                                        0 => 'http',
+                                    ],
+                                    'service' => 'maintenance',
+                                    'rule' => 'PathPrefix(`/`)',
                                     'priority' => -1000,
                                 ],
                             ],
@@ -413,14 +420,21 @@ class Server extends BaseModel
                             'routers' => [
                                 'catchall' => [
                                     'entryPoints' => [
-                                        0 => 'http',
-                                        1 => 'https',
+                                        0 => 'https',
                                     ],
                                     'service' => 'noop',
                                     'rule' => 'PathPrefix(`/`)',
                                     'tls' => [
                                         'certResolver' => 'letsencrypt',
                                     ],
+                                    'priority' => -1000,
+                                ],
+                                'catchall-http' => [
+                                    'entryPoints' => [
+                                        0 => 'http',
+                                    ],
+                                    'service' => 'noop',
+                                    'rule' => 'PathPrefix(`/`)',
                                     'priority' => -1000,
                                 ],
                             ],
@@ -435,6 +449,9 @@ class Server extends BaseModel
                     ];
                     if (filled($redirect_url)) {
                         $dynamic_conf['http']['routers']['catchall']['middlewares'] = [
+                            0 => 'redirect-regexp',
+                        ];
+                        $dynamic_conf['http']['routers']['catchall-http']['middlewares'] = [
                             0 => 'redirect-regexp',
                         ];
 
