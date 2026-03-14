@@ -475,6 +475,7 @@ class Server extends BaseModel
     public function startMaintenanceContainer(?string $customHtml = null): void
     {
         try {
+            $maintenanceNetwork = $this->isSwarm() ? 'coolify-overlay' : 'coolify';
             $html = filled($customHtml) ? $customHtml : defaultMaintenancePageHtml();
             $nginxConf = maintenanceNginxConfiguration();
 
@@ -484,7 +485,7 @@ class Server extends BaseModel
             instant_remote_process([
                 'docker rm -f coolify-maintenance 2>/dev/null || true',
                 'docker pull nginx:alpine 2>/dev/null || true',
-                'docker run -d --name coolify-maintenance --network coolify --restart unless-stopped '.
+                "docker run -d --name coolify-maintenance --network {$maintenanceNetwork} --restart unless-stopped ".
                     '--label coolify.managed=true nginx:alpine',
                 "echo '$confBase64' | base64 -d | docker exec -i coolify-maintenance tee /etc/nginx/conf.d/default.conf > /dev/null",
                 "echo '$htmlBase64' | base64 -d | docker exec -i coolify-maintenance tee /usr/share/nginx/html/index.html > /dev/null",

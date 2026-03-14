@@ -1,7 +1,5 @@
 <?php
 
-use Symfony\Component\Yaml\Yaml;
-
 it('returns valid HTML with DOCTYPE', function () {
     $html = defaultMaintenancePageHtml();
 
@@ -66,43 +64,6 @@ it('generates nginx config listening on port 80', function () {
     expect($config)->toContain('listen 80 default_server');
 });
 
-it('generates traefik config routing to maintenance container', function () {
-    $dynamic_conf = [
-        'http' => [
-            'routers' => [
-                'catchall' => [
-                    'entryPoints' => ['http', 'https'],
-                    'service' => 'maintenance',
-                    'rule' => 'PathPrefix(`/`)',
-                    'tls' => ['certResolver' => 'letsencrypt'],
-                    'priority' => -1000,
-                ],
-            ],
-            'services' => [
-                'maintenance' => [
-                    'loadBalancer' => [
-                        'servers' => [
-                            ['url' => 'http://coolify-maintenance:80'],
-                        ],
-                    ],
-                ],
-            ],
-        ],
-    ];
-
-    $yaml = Yaml::dump($dynamic_conf, 12, 2);
-
-    expect($yaml)
-        ->toContain('service: maintenance')
-        ->toContain('url: \'http://coolify-maintenance:80\'');
-});
-
-it('generates caddy config with reverse_proxy to maintenance container', function () {
-    $conf = ":80, :443 {\n    tls internal\n    reverse_proxy coolify-maintenance:80\n}";
-
-    expect($conf)->toContain('reverse_proxy coolify-maintenance:80');
-});
-
 it('redirect_url takes priority over maintenance page', function () {
     $redirect_url = 'https://example.com';
     $maintenance_page_enabled = true;
@@ -146,8 +107,3 @@ it('falls back to default HTML when custom is not provided', function () {
     expect($html)->toBe(defaultMaintenancePageHtml());
 });
 
-it('generates cleanup command for maintenance container', function () {
-    $command = 'docker rm -f coolify-maintenance 2>/dev/null || true';
-
-    expect($command)->toContain('coolify-maintenance');
-});
