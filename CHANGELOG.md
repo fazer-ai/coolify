@@ -4,6 +4,16 @@ All notable changes to this project will be documented in this file.
 
 ## [unreleased]
 
+### 📚 Documentation
+
+- Update changelog
+
+### ⚙️ Miscellaneous Tasks
+
+- Update R2 object paths to use fazer-ai-hub-assets
+
+## [4.0.0-beta.468-fazer-ai.1] - 2026-03-14
+
 ### 🚀 Features
 
 - Use tags in update
