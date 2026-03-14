@@ -4,20 +4,9 @@ All notable changes to this project will be documented in this file.
 
 ## [unreleased]
 
-### ⚙️ Miscellaneous Tasks
+### 🐛 Bug Fixes
 
-- Add --remote flag to R2 object upload commands
-
-## [4.0.0-beta.468-fazer-ai.2] - 2026-03-14
-
-### 📚 Documentation
-
-- Update changelog
-- Update changelog
-
-### ⚙️ Miscellaneous Tasks
-
-- Update R2 object paths to use fazer-ai-hub-assets
+- *(proxy)* Split Traefik catchall into separate HTTP/HTTPS routers
 
 ## [4.0.0-beta.468-fazer-ai.1] - 2026-03-14
 
@@ -5934,6 +5923,9 @@ All notable changes to this project will be documented in this file.
 - *(readme)* Move MVPS to Huge Sponsors section
 - *(settings)* Clarify Do Not Track helper text
 - Update changelog
+- Update changelog
+- Update changelog
+- Update changelog
 
 ### ⚡ Performance
 
@@ -6771,6 +6763,8 @@ All notable changes to this project will be documented in this file.
 - *(release)* Bump version to 4.0.0-beta.466
 - Prepare for PR
 - Prepare for PR
+- Update R2 object paths to use fazer-ai-hub-assets
+- Add --remote flag to R2 object upload commands
 
 ### ◀️ Revert
 
