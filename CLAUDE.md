@@ -82,6 +82,33 @@ npm run build                   # production build
 - Development branch: `next`
 - PRs should target `v4.x`
 
+### Fork Remotes
+
+- `origin` — upstream (coollabsio/coolify)
+- `fazer-ai` — our fork (fazer-ai/coolify)
+- `fork` — personal fork (gabrieljablonski/coolify)
+
+### Merging with Upstream
+
+1. `git fetch origin`
+2. `git merge origin/v4.x --no-edit`
+3. Resolve conflicts if any. Pay special attention to `versions.json`, which diverges in structure. After merge, ensure it matches upstream's structure/content.
+4. Commit the merge, then sync `versions.json` if needed: `git add versions.json && git commit -m "chore: sync versions.json with upstream beta.XXX"`
+5. Push to fazer-ai: `git push fazer-ai v4.x`
+
+### Releasing (fazer-ai fork)
+
+Tags follow the format `v4.0.0-beta.<upstream-build>-fazer-ai.<build>`. The upstream build number tracks coollabsio's version; the fazer-ai build number is ours and increments sequentially across upstream bumps (it does NOT reset when upstream changes).
+
+Example progression: `...fazer-ai.2` then `...fazer-ai.3`, even if the upstream part changed from `beta.468` to `beta.470`.
+
+To release, use `/release --skip-review`. The skill auto-detects the tag format and increments the build number. If the upstream base version changed, manually set the correct base in the tag.
+
+Alternatively, manual steps:
+1. `git tag v4.0.0-beta.XXX-fazer-ai.N`
+2. `git push fazer-ai v4.0.0-beta.XXX-fazer-ai.N`
+3. Create GitHub release via `gh release create` on the `fazer-ai/coolify` repo
+
 <laravel-boost-guidelines>
 === foundation rules ===
 
