@@ -87,6 +87,9 @@ class ServerManagerJob implements ShouldBeEncrypted, ShouldQueue
                     if ($server->isSentinelEnabled() && $server->isSentinelLive()) {
                         return;
                     }
+                    if ($this->shouldSkipDueToBackoff($server)) {
+                        return;
+                    }
                     ServerConnectionCheckJob::dispatch($server);
                 } catch (\Exception $e) {
                     Log::channel('scheduled-errors')->error('Failed to dispatch ServerConnectionCheck', [
@@ -129,8 +132,10 @@ class ServerManagerJob implements ShouldBeEncrypted, ShouldQueue
 
         if ($sentinelOutOfSync) {
             // Dispatch ServerCheckJob if Sentinel is out of sync
-            if ($this->shouldRunNow($this->checkFrequency, $serverTimezone)) {
-                ServerCheckJob::dispatch($server);
+            if (shouldRunCronNow($this->checkFrequency, $serverTimezone, "server-check:{$server->id}", $this->executionTime)) {
+                if (! $this->shouldSkipDueToBackoff($server)) {
+                    ServerCheckJob::dispatch($server);
+                }
             }
         }
 
@@ -167,14 +172,38 @@ class ServerManagerJob implements ShouldBeEncrypted, ShouldQueue
         // Crash recovery is handled by sentinelOutOfSync → ServerCheckJob → CheckAndStartSentinelJob.
     }
 
-    private function shouldRunNow(string $frequency, ?string $timezone = null): bool
+    /**
+     * Determine the backoff cycle interval based on how many consecutive times a server has been unreachable.
+     * Higher counts → less frequent checks (based on 5-min cloud cycle):
+     *   0-2: every cycle, 3-5: ~15 min, 6-11: ~30 min, 12+: ~60 min
+     */
+    private function getBackoffCycleInterval(int $unreachableCount): int
     {
-        $cron = new CronExpression($frequency);
+        return match (true) {
+            $unreachableCount <= 2 => 1,
+            $unreachableCount <= 5 => 3,
+            $unreachableCount <= 11 => 6,
+            default => 12,
+        };
+    }
 
-        // Use the frozen execution time, not the current time
-        $baseTime = $this->executionTime ?? Carbon::now();
-        $executionTime = $baseTime->copy()->setTimezone($timezone ?? config('app.timezone'));
+    /**
+     * Check if a server should be skipped this cycle due to unreachable backoff.
+     * Uses server ID hash to distribute checks across cycles (avoid thundering herd).
+     */
+    private function shouldSkipDueToBackoff(Server $server): bool
+    {
+        $unreachableCount = $server->unreachable_count ?? 0;
+        $interval = $this->getBackoffCycleInterval($unreachableCount);
 
-        return $cron->isDue($executionTime);
+        if ($interval <= 1) {
+            return false;
+        }
+
+        $cyclePeriodMinutes = isCloud() ? 5 : 1;
+        $cycleIndex = intdiv($this->executionTime->minute, $cyclePeriodMinutes);
+        $serverHash = abs(crc32((string) $server->id));
+
+        return ($cycleIndex + $serverHash) % $interval !== 0;
     }
 }

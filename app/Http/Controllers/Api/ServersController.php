@@ -289,7 +289,11 @@ class ServersController extends Controller
         if (is_null($teamId)) {
             return invalidTokenResponse();
         }
-        $uuid = $request->get('uuid');
+        $server = ModelsServer::whereTeamId($teamId)->whereUuid($request->uuid)->first();
+        if (is_null($server)) {
+            return response()->json(['message' => 'Server not found.'], 404);
+        }
+        $uuid = $request->query('uuid');
         if ($uuid) {
             $application = Application::ownedByCurrentTeamAPI($teamId)->where('uuid', $uuid)->first();
             if (! $application) {
@@ -300,7 +304,9 @@ class ServersController extends Controller
         }
         $projects = Project::where('team_id', $teamId)->get();
         $domains = collect();
-        $applications = $projects->pluck('applications')->flatten();
+        $applications = $projects->pluck('applications')->flatten()->filter(function ($application) use ($server) {
+            return $application->destination?->server?->id === $server->id;
+        });
         $settings = instanceSettings();
         if ($applications->count() > 0) {
             foreach ($applications as $application) {
@@ -340,7 +346,9 @@ class ServersController extends Controller
                 }
             }
         }
-        $services = $projects->pluck('services')->flatten();
+        $services = $projects->pluck('services')->flatten()->filter(function ($service) use ($server) {
+            return $service->server_id === $server->id;
+        });
         if ($services->count() > 0) {
             foreach ($services as $service) {
                 $service_applications = $service->applications;
@@ -353,7 +361,8 @@ class ServersController extends Controller
                         })->filter(function (Stringable $fqdn) {
                             return $fqdn->isNotEmpty();
                         });
-                        if ($ip === 'host.docker.internal') {
+                        $serviceIp = $server->ip;
+                        if ($serviceIp === 'host.docker.internal') {
                             if ($settings->public_ipv4) {
                                 $domains->push([
                                     'domain' => $fqdn,
@@ -369,13 +378,13 @@ class ServersController extends Controller
                             if (! $settings->public_ipv4 && ! $settings->public_ipv6) {
                                 $domains->push([
                                     'domain' => $fqdn,
-                                    'ip' => $ip,
+                                    'ip' => $serviceIp,
                                 ]);
                             }
                         } else {
                             $domains->push([
                                 'domain' => $fqdn,
-                                'ip' => $ip,
+                                'ip' => $serviceIp,
                             ]);
                         }
                     }
@@ -588,6 +597,11 @@ class ServersController extends Controller
                         'is_build_server' => ['type' => 'boolean', 'description' => 'Is build server.'],
                         'instant_validate' => ['type' => 'boolean', 'description' => 'Instant validate.'],
                         'proxy_type' => ['type' => 'string', 'enum' => ['traefik', 'caddy', 'none'], 'description' => 'The proxy type.'],
+                        'concurrent_builds' => ['type' => 'integer', 'description' => 'Number of concurrent builds.'],
+                        'dynamic_timeout' => ['type' => 'integer', 'description' => 'Deployment timeout in seconds.'],
+                        'deployment_queue_limit' => ['type' => 'integer', 'description' => 'Maximum number of queued deployments.'],
+                        'server_disk_usage_notification_threshold' => ['type' => 'integer', 'description' => 'Server disk usage notification threshold (%).'],
+                        'server_disk_usage_check_frequency' => ['type' => 'string', 'description' => 'Cron expression for disk usage check frequency.'],
                     ],
                 ),
             ),
@@ -624,7 +638,7 @@ class ServersController extends Controller
     )]
     public function update_server(Request $request)
     {
-        $allowedFields = ['name', 'description', 'ip', 'port', 'user', 'private_key_uuid', 'is_build_server', 'instant_validate', 'proxy_type'];
+        $allowedFields = ['name', 'description', 'ip', 'port', 'user', 'private_key_uuid', 'is_build_server', 'instant_validate', 'proxy_type', 'concurrent_builds', 'dynamic_timeout', 'deployment_queue_limit', 'server_disk_usage_notification_threshold', 'server_disk_usage_check_frequency'];
 
         $teamId = getTeamIdFromToken();
         if (is_null($teamId)) {
@@ -645,6 +659,11 @@ class ServersController extends Controller
             'is_build_server' => 'boolean|nullable',
             'instant_validate' => 'boolean|nullable',
             'proxy_type' => 'string|nullable',
+            'concurrent_builds' => 'integer|min:1',
+            'dynamic_timeout' => 'integer|min:1',
+            'deployment_queue_limit' => 'integer|min:1',
+            'server_disk_usage_notification_threshold' => 'integer|min:1|max:100',
+            'server_disk_usage_check_frequency' => 'string',
         ]);
 
         $extraFields = array_diff(array_keys($request->all()), $allowedFields);
@@ -681,6 +700,19 @@ class ServersController extends Controller
                 'is_build_server' => $request->is_build_server,
             ]);
         }
+
+        if ($request->has('server_disk_usage_check_frequency') && ! validate_cron_expression($request->server_disk_usage_check_frequency)) {
+            return response()->json([
+                'message' => 'Validation failed.',
+                'errors' => ['server_disk_usage_check_frequency' => ['Invalid Cron / Human expression for Disk Usage Check Frequency.']],
+            ], 422);
+        }
+
+        $advancedSettings = $request->only(['concurrent_builds', 'dynamic_timeout', 'deployment_queue_limit', 'server_disk_usage_notification_threshold', 'server_disk_usage_check_frequency']);
+        if (! empty($advancedSettings)) {
+            $server->settings()->update(array_filter($advancedSettings, fn ($value) => ! is_null($value)));
+        }
+
         if ($request->instant_validate) {
             ValidateServer::dispatch($server);
         }
