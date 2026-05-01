@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Actions\Application\CleanupPreviewDeployment;
 use App\Actions\Application\LoadComposeFile;
 use App\Actions\Application\StopApplication;
 use App\Actions\Service\StartService;
@@ -9,8 +10,11 @@ use App\Enums\BuildPackTypes;
 use App\Http\Controllers\Controller;
 use App\Jobs\DeleteResourceJob;
 use App\Models\Application;
+use App\Models\ApplicationPreview;
 use App\Models\EnvironmentVariable;
 use App\Models\GithubApp;
+use App\Models\LocalFileVolume;
+use App\Models\LocalPersistentVolume;
 use App\Models\PrivateKey;
 use App\Models\Project;
 use App\Models\Server;
@@ -215,7 +219,7 @@ class ApplicationsController extends Controller
                                     type: 'object',
                                     properties: [
                                         'name' => ['type' => 'string', 'description' => 'The service name as defined in docker-compose.'],
-                                        'domain' => ['type' => 'string', 'description' => 'Comma-separated list of URLs (e.g. "http://app.coolify.io,https://app2.coolify.io")'],
+                                        'domain' => ['type' => 'string', 'description' => 'Comma-separated list of URLs (e.g. "https://app.coolify.io,https://app2.coolify.io")'],
                                     ],
                                 ),
                             ],
@@ -381,7 +385,7 @@ class ApplicationsController extends Controller
                                     type: 'object',
                                     properties: [
                                         'name' => ['type' => 'string', 'description' => 'The service name as defined in docker-compose.'],
-                                        'domain' => ['type' => 'string', 'description' => 'Comma-separated list of URLs (e.g. "http://app.coolify.io,https://app2.coolify.io")'],
+                                        'domain' => ['type' => 'string', 'description' => 'Comma-separated list of URLs (e.g. "https://app.coolify.io,https://app2.coolify.io")'],
                                     ],
                                 ),
                             ],
@@ -547,7 +551,7 @@ class ApplicationsController extends Controller
                                     type: 'object',
                                     properties: [
                                         'name' => ['type' => 'string', 'description' => 'The service name as defined in docker-compose.'],
-                                        'domain' => ['type' => 'string', 'description' => 'Comma-separated list of URLs (e.g. "http://app.coolify.io,https://app2.coolify.io")'],
+                                        'domain' => ['type' => 'string', 'description' => 'Comma-separated list of URLs (e.g. "https://app.coolify.io,https://app2.coolify.io")'],
                                     ],
                                 ),
                             ],
@@ -1056,7 +1060,7 @@ class ApplicationsController extends Controller
         $connectToDockerNetwork = $request->connect_to_docker_network;
         $customNginxConfiguration = $request->custom_nginx_configuration;
         $isContainerLabelEscapeEnabled = $request->boolean('is_container_label_escape_enabled', true);
-        $isPreserveRepositoryEnabled = $request->boolean('is_preserve_repository_enabled',false);
+        $isPreserveRepositoryEnabled = $request->boolean('is_preserve_repository_enabled', false);
 
         if (! is_null($customNginxConfiguration)) {
             if (! isBase64Encoded($customNginxConfiguration)) {
@@ -2395,7 +2399,7 @@ class ApplicationsController extends Controller
                                     type: 'object',
                                     properties: [
                                         'name' => ['type' => 'string', 'description' => 'The service name as defined in docker-compose.'],
-                                        'domain' => ['type' => 'string', 'description' => 'Comma-separated list of URLs (e.g. "http://app.coolify.io,https://app2.coolify.io")'],
+                                        'domain' => ['type' => 'string', 'description' => 'Comma-separated list of URLs (e.g. "https://app.coolify.io,https://app2.coolify.io")'],
                                     ],
                                 ),
                             ],
@@ -2501,8 +2505,6 @@ class ApplicationsController extends Controller
             'docker_compose_domains.*' => 'array:name,domain',
             'docker_compose_domains.*.name' => 'string|required',
             'docker_compose_domains.*.domain' => 'string|nullable',
-            'docker_compose_custom_start_command' => 'string|nullable',
-            'docker_compose_custom_build_command' => 'string|nullable',
             'custom_nginx_configuration' => 'string|nullable',
             'is_http_basic_auth_enabled' => 'boolean|nullable',
             'http_basic_auth_username' => 'string',
@@ -2980,7 +2982,7 @@ class ApplicationsController extends Controller
         if ($return instanceof JsonResponse) {
             return $return;
         }
-        $application = Application::ownedByCurrentTeamAPI($teamId)->where('uuid', $request->uuid)->first();
+        $application = Application::ownedByCurrentTeamAPI($teamId)->where('uuid', $request->route('uuid'))->first();
 
         if (! $application) {
             return response()->json([
@@ -3181,7 +3183,7 @@ class ApplicationsController extends Controller
         if ($return instanceof JsonResponse) {
             return $return;
         }
-        $application = Application::ownedByCurrentTeamAPI($teamId)->where('uuid', $request->uuid)->first();
+        $application = Application::ownedByCurrentTeamAPI($teamId)->where('uuid', $request->route('uuid'))->first();
 
         if (! $application) {
             return response()->json([
@@ -3198,7 +3200,7 @@ class ApplicationsController extends Controller
             ], 400);
         }
         $bulk_data = collect($bulk_data)->map(function ($item) {
-            return collect($item)->only(['key', 'value', 'is_preview', 'is_literal', 'is_multiline', 'is_shown_once', 'is_runtime', 'is_buildtime']);
+            return collect($item)->only(['key', 'value', 'is_preview', 'is_literal', 'is_multiline', 'is_shown_once', 'is_runtime', 'is_buildtime', 'comment']);
         });
         $returnedEnvs = collect();
         foreach ($bulk_data as $item) {
@@ -3211,6 +3213,7 @@ class ApplicationsController extends Controller
                 'is_shown_once' => 'boolean',
                 'is_runtime' => 'boolean',
                 'is_buildtime' => 'boolean',
+                'comment' => 'string|nullable|max:256',
             ]);
             if ($validator->fails()) {
                 return response()->json([
@@ -3243,6 +3246,9 @@ class ApplicationsController extends Controller
                     if ($item->has('is_buildtime') && $env->is_buildtime != $item->get('is_buildtime')) {
                         $env->is_buildtime = $item->get('is_buildtime');
                     }
+                    if ($item->has('comment') && $env->comment != $item->get('comment')) {
+                        $env->comment = $item->get('comment');
+                    }
                     $env->save();
                 } else {
                     $env = $application->environment_variables()->create([
@@ -3254,6 +3260,7 @@ class ApplicationsController extends Controller
                         'is_shown_once' => $is_shown_once,
                         'is_runtime' => $item->get('is_runtime', true),
                         'is_buildtime' => $item->get('is_buildtime', true),
+                        'comment' => $item->get('comment'),
                         'resourceable_type' => get_class($application),
                         'resourceable_id' => $application->id,
                     ]);
@@ -3277,6 +3284,9 @@ class ApplicationsController extends Controller
                     if ($item->has('is_buildtime') && $env->is_buildtime != $item->get('is_buildtime')) {
                         $env->is_buildtime = $item->get('is_buildtime');
                     }
+                    if ($item->has('comment') && $env->comment != $item->get('comment')) {
+                        $env->comment = $item->get('comment');
+                    }
                     $env->save();
                 } else {
                     $env = $application->environment_variables()->create([
@@ -3288,6 +3298,7 @@ class ApplicationsController extends Controller
                         'is_shown_once' => $is_shown_once,
                         'is_runtime' => $item->get('is_runtime', true),
                         'is_buildtime' => $item->get('is_buildtime', true),
+                        'comment' => $item->get('comment'),
                         'resourceable_type' => get_class($application),
                         'resourceable_id' => $application->id,
                     ]);
@@ -3375,7 +3386,7 @@ class ApplicationsController extends Controller
         if (is_null($teamId)) {
             return invalidTokenResponse();
         }
-        $application = Application::ownedByCurrentTeamAPI($teamId)->where('uuid', $request->uuid)->first();
+        $application = Application::ownedByCurrentTeamAPI($teamId)->where('uuid', $request->route('uuid'))->first();
 
         if (! $application) {
             return response()->json([
@@ -3532,7 +3543,7 @@ class ApplicationsController extends Controller
         if (is_null($teamId)) {
             return invalidTokenResponse();
         }
-        $application = Application::ownedByCurrentTeamAPI($teamId)->where('uuid', $request->uuid)->first();
+        $application = Application::ownedByCurrentTeamAPI($teamId)->where('uuid', $request->route('uuid'))->first();
 
         if (! $application) {
             return response()->json([
@@ -3542,7 +3553,7 @@ class ApplicationsController extends Controller
 
         $this->authorize('manageEnvironment', $application);
 
-        $found_env = EnvironmentVariable::where('uuid', $request->env_uuid)
+        $found_env = EnvironmentVariable::where('uuid', $request->route('env_uuid'))
             ->where('resourceable_type', Application::class)
             ->where('resourceable_id', $application->id)
             ->first();
@@ -4110,7 +4121,7 @@ class ApplicationsController extends Controller
             'is_preview_suffix_enabled' => 'boolean',
             'name' => ['string', 'regex:'.ValidationPatterns::VOLUME_NAME_PATTERN],
             'mount_path' => 'string',
-            'host_path' => 'string|nullable',
+            'host_path' => ['string', 'nullable', 'regex:'.ValidationPatterns::DIRECTORY_PATH_PATTERN],
             'content' => 'string|nullable',
         ]);
 
@@ -4288,7 +4299,7 @@ class ApplicationsController extends Controller
             'type' => 'required|string|in:persistent,file',
             'name' => ['string', 'regex:'.ValidationPatterns::VOLUME_NAME_PATTERN],
             'mount_path' => 'required|string',
-            'host_path' => 'string|nullable',
+            'host_path' => ['string', 'nullable', 'regex:'.ValidationPatterns::DIRECTORY_PATH_PATTERN],
             'content' => 'string|nullable',
             'is_directory' => 'boolean',
             'fs_path' => 'string',
@@ -4464,5 +4475,74 @@ class ApplicationsController extends Controller
         $storage->delete();
 
         return response()->json(['message' => 'Storage deleted.']);
+    }
+
+    #[OA\Delete(
+        summary: 'Delete Preview Deployment',
+        description: 'Delete a preview deployment for a pull request. Cancels active deployments, stops containers, removes volumes/networks, and deletes the preview record.',
+        path: '/applications/{uuid}/previews/{pull_request_id}',
+        operationId: 'delete-preview-deployment-by-pull-request-id',
+        security: [
+            ['bearerAuth' => []],
+        ],
+        tags: ['Applications'],
+        parameters: [
+            new OA\Parameter(
+                name: 'uuid',
+                in: 'path',
+                description: 'UUID of the application.',
+                required: true,
+                schema: new OA\Schema(type: 'string')
+            ),
+            new OA\Parameter(
+                name: 'pull_request_id',
+                in: 'path',
+                description: 'Pull request ID of the preview to delete.',
+                required: true,
+                schema: new OA\Schema(type: 'integer')
+            ),
+        ],
+        responses: [
+            new OA\Response(response: 200, description: 'Preview deletion queued.', content: new OA\JsonContent(
+                properties: [new OA\Property(property: 'message', type: 'string')],
+            )),
+            new OA\Response(response: 401, ref: '#/components/responses/401'),
+            new OA\Response(response: 400, ref: '#/components/responses/400'),
+            new OA\Response(response: 404, ref: '#/components/responses/404'),
+            new OA\Response(response: 422, ref: '#/components/responses/422'),
+        ]
+    )]
+    public function delete_preview_by_pull_request_id(Request $request): JsonResponse
+    {
+        $teamId = getTeamIdFromToken();
+        if (is_null($teamId)) {
+            return invalidTokenResponse();
+        }
+
+        $application = Application::ownedByCurrentTeamAPI($teamId)->where('uuid', $request->uuid)->first();
+        if (! $application) {
+            return response()->json(['message' => 'Application not found.'], 404);
+        }
+
+        $this->authorize('delete', $application);
+
+        $pullRequestIdRaw = $request->route('pull_request_id');
+        if (! is_numeric($pullRequestIdRaw) || (int) $pullRequestIdRaw <= 0) {
+            return response()->json(['message' => 'Invalid pull_request_id.'], 422);
+        }
+        $pullRequestId = (int) $pullRequestIdRaw;
+
+        $preview = ApplicationPreview::where('application_id', $application->id)
+            ->where('pull_request_id', $pullRequestId)
+            ->first();
+
+        if (! $preview) {
+            return response()->json(['message' => 'Preview not found.'], 404);
+        }
+
+        $preview->delete();
+        CleanupPreviewDeployment::run($application, $pullRequestId, $preview);
+
+        return response()->json(['message' => 'Preview deletion request queued.']);
     }
 }

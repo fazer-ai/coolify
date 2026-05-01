@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Support\ValidationPatterns;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Spatie\Url\Url;
 use Visus\Cuid2\Cuid2;
@@ -42,11 +43,18 @@ class ApplicationPreview extends BaseModel
                 $networkKeys = collect($networks)->keys();
                 $volumeKeys = collect($volumes)->keys();
                 $volumeKeys->each(function ($key) use ($server) {
-                    instant_remote_process(["docker volume rm -f $key"], $server, false);
+                    if (! preg_match(ValidationPatterns::VOLUME_NAME_PATTERN, $key)) {
+                        return;
+                    }
+                    instant_remote_process(['docker volume rm -f '.escapeshellarg($key)], $server, false);
                 });
                 $networkKeys->each(function ($key) use ($server) {
-                    instant_remote_process(["docker network disconnect $key coolify-proxy"], $server, false);
-                    instant_remote_process(["docker network rm $key"], $server, false);
+                    if (! preg_match(ValidationPatterns::DOCKER_NETWORK_PATTERN, $key)) {
+                        return;
+                    }
+                    $k = escapeshellarg($key);
+                    instant_remote_process(["docker network disconnect {$k} coolify-proxy"], $server, false);
+                    instant_remote_process(["docker network rm {$k}"], $server, false);
                 });
             } else {
                 // Regular application volume cleanup
@@ -182,6 +190,16 @@ class ApplicationPreview extends BaseModel
         }
 
         $this->docker_compose_domains = json_encode($docker_compose_domains);
+
+        // Populate fqdn from generated domains so webhook notifications can read it
+        $allDomains = collect($docker_compose_domains)
+            ->pluck('domain')
+            ->filter(fn ($d) => ! empty($d))
+            ->flatMap(fn ($d) => explode(',', $d))
+            ->implode(',');
+
+        $this->fqdn = ! empty($allDomains) ? $allDomains : null;
+
         $this->save();
     }
 }

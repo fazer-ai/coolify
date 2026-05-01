@@ -3,10 +3,9 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Casts\Attribute;
-use Illuminate\Database\Eloquent\Model;
 use Symfony\Component\Yaml\Yaml;
 
-class LocalPersistentVolume extends Model
+class LocalPersistentVolume extends BaseModel
 {
     protected $fillable = [
         'name',
@@ -16,6 +15,10 @@ class LocalPersistentVolume extends Model
         'resource_type',
         'resource_id',
         'is_preview_suffix_enabled',
+    ];
+
+    protected $casts = [
+        'is_preview_suffix_enabled' => 'boolean',
     ];
 
     public function resource()
