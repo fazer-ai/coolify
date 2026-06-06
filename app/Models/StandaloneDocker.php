@@ -5,6 +5,7 @@ namespace App\Models;
 use App\Jobs\ConnectProxyToNetworksJob;
 use App\Support\ValidationPatterns;
 use App\Traits\HasSafeStringAttribute;
+use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 
 class StandaloneDocker extends BaseModel
@@ -127,15 +128,18 @@ class StandaloneDocker extends BaseModel
         return $this->morphMany(Service::class, 'destination');
     }
 
-    public function databases()
+    public function databases(): Collection
     {
         $postgresqls = $this->postgresqls;
         $redis = $this->redis;
         $mongodbs = $this->mongodbs;
         $mysqls = $this->mysqls;
         $mariadbs = $this->mariadbs;
+        $keydbs = $this->keydbs;
+        $dragonflies = $this->dragonflies;
+        $clickhouses = $this->clickhouses;
 
-        return $postgresqls->concat($redis)->concat($mongodbs)->concat($mysqls)->concat($mariadbs);
+        return $postgresqls->concat($redis)->concat($mongodbs)->concat($mysqls)->concat($mariadbs)->concat($keydbs)->concat($dragonflies)->concat($clickhouses);
     }
 
     public function attachedTo()
