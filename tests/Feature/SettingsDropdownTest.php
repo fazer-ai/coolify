@@ -42,3 +42,16 @@ it('renders the changelog modal above the desktop sidebar toggle', function () {
         ->assertSee('z-[60]', false)
         ->assertSee('closeWhatsNewModal', false);
 });
+
+it('stores the coolify version without a leading "v"', function () {
+    // The dropdown renders the version as 'v'.config('constants.coolify.version').
+    // If the stored version itself starts with "v" (e.g. a release tag injected
+    // verbatim by the build pipeline), the UI ends up showing "vv4.1.2-...".
+    expect(config('constants.coolify.version'))->not->toStartWith('v');
+});
+
+it('renders the current version with a single leading "v"', function () {
+    config()->set('constants.coolify.version', '4.1.2-fazer-ai.6');
+
+    expect((new SettingsDropdown)->getCurrentVersionProperty())->toBe('v4.1.2-fazer-ai.6');
+});
